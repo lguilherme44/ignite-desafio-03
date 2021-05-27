@@ -34,13 +34,56 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
 
   const addProduct = async (productId: number) => {
     try {
-      const newCart = [...cart];
+      /* procura no array de cart se existe um produto com o codigo igual ao que queremos adicionar */
+      const findProductInCart = cart.find(
+        (product) => product.id === productId
+      );
 
-      const findProduct = newCart.filter((product) => product.id === productId);
+      if (!findProductInCart) {
+        /* se não houver, realiza uma consulta na API passando o id do produto para pegar os detalhes atuais do produto */
+        const { data: product } = await api.get<Product>(
+          `products/${productId}`
+        );
+        /* realizar uma consulta na API passando o id do produto para pegar as informações referente ao estoque */
+        const { data: stock } = await api.get<Stock>(`stock/${productId}`);
 
-      const { data: stock } = await api.get(`/stock/${productId}`);
+        /* se o estoque do produto em questão for maior que 0 */
+        if (stock.amount > 0) {
+          /* copiamos o valor de cart, e no objeto do produto, adicionamos o amount: 1 */
+          setCart([...cart, { ...product, amount: 1 }]);
+          /* persiste no localstorage */
+          localStorage.setItem(
+            "@RocketShoes:cart",
+            JSON.stringify([...cart, { ...product, amount: 1 }])
+          );
+          toast.success("Produto adicionado com sucesso");
+          return;
+        }
+      }
 
-      console.log(stock);
+      if (findProductInCart) {
+        const { data: stock } = await api.get(`stock/${productId}`);
+
+        if (stock.amount > findProductInCart.amount) {
+          const updatedCart = cart.map((item) =>
+            item.id === productId
+              ? {
+                  ...item,
+                  amount: Number(item.amount) + 1,
+                }
+              : item
+          );
+
+          setCart(updatedCart);
+          localStorage.setItem(
+            "@RocketShoes:cart",
+            JSON.stringify(updatedCart)
+          );
+          return;
+        } else {
+          toast.error("Quantidade solicitada fora de estoque");
+        }
+      }
     } catch {
       toast.error("Erro na adição do produto");
     }
